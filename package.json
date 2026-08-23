@@ -1,0 +1,13 @@
+{
+  "name": "bang-online",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "4-7인용 BANG! self-hosted 온라인 보드게임",
+  "scripts": {
+    "start": "node server/server.js",
+    "check": "node --check server/server.js && node --check engine/game.js && node --check public/app.js",
+    "test": "node --test tests"
+  },
+  "engines": { "node": ">=22" }
+}

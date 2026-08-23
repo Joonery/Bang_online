@@ -1,1 +1,49 @@
-# Bang_online
+# BANG! Online
+
+공식 기본판 카드 80장과 캐릭터 16종을 사용하는 4~7인용 브라우저 보드게임입니다. 개인 Oracle VM에서 가볍게 운영할 수 있도록 외부 npm 패키지, 데이터베이스, 빌드 과정 없이 Node.js 표준 라이브러리만 사용합니다.
+
+## 실행
+
+Node.js 22 이상이 필요합니다.
+
+```bash
+npm start
+```
+
+기본 주소는 `http://localhost:3000`입니다. 다른 포트는 `PORT` 환경 변수로 지정합니다.
+
+```bash
+PORT=8080 npm start
+```
+
+## 검사
+
+```bash
+npm run check
+npm test
+```
+
+설치할 npm dependency는 없습니다. `npm install`도 필요하지 않습니다.
+
+## 구조
+
+- `engine/game.js`: 권위 있는 서버 규칙 엔진, turn/pending/death/victory 처리
+- `game-data.js`: 역할, 캐릭터, 공식 카드 80장 데이터와 이미지 매핑
+- `server/server.js`: 단일 세션 HTTP/SSE 서버, token 재접속, 플레이어별 state 필터
+- `public/`: 반응형 클라이언트, 로그·채팅·룰북·카드 사전
+- `src/`: 원본 카드 이미지(장기 캐시 적용)
+- `tests/`: 규칙 엔진과 HTTP/SSE 통합 테스트
+- `deploy/`: systemd와 Caddy 예시
+- `docs/DEPLOYMENT.md`: Oracle VM 배포 절차
+
+## 네트워크와 세션
+
+브라우저 명령은 작은 JSON HTTP POST로 보내고, 서버 상태는 SSE(Server-Sent Events)로 변경 시에만 전달합니다. 카드 이미지에는 1년 immutable cache가 적용됩니다. 상태는 플레이어별로 만들기 때문에 자신의 손패와 역할만 받을 수 있으며, 상대 손패·숨은 역할·덱 순서는 응답에 포함되지 않습니다.
+
+브라우저의 `localStorage`에는 무작위 session token만 저장합니다. 새로고침이나 일시적인 연결 끊김 뒤 동일 플레이어로 복구되지만, 서버 프로세스를 재시작하면 게임·채팅·로그가 사라집니다. 이는 DB를 도입하지 않기 위한 의도적인 휘발성 설계입니다.
+
+게임 시작은 역할 공개, 각 플레이어에게만 보이는 무작위 인물 후보 두 장 중 한 장 선택, 시작 손패 분배 순으로 진행됩니다. 데스크톱에서는 로그·채팅 패널이 오른쪽에 상시 표시되고 모바일에서는 상단 버튼으로 열 수 있습니다.
+
+주르도네·술통·감옥·다이너마이트 판정은 해당 플레이어가 직접 `카드 뒤집기`를 눌러 진행합니다. 감옥과 다이너마이트 결과는 카드·문양·성공 여부와 함께 모든 플레이어에게 즉시 공개됩니다. 새 총을 장착하면 기존 총은 자동으로 버려지며, 게임 종료 시 모든 플레이어에게 승리 연출이 표시됩니다.
+
+배포 방법은 [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md), 룰 해석 기록은 [RULE_ASSUMPTIONS.md](RULE_ASSUMPTIONS.md)를 참고하세요.

@@ -16,10 +16,9 @@ BANG! 온라인 게임을 구현한다. 클라이언트는 인터넷 브라우�
 ## 2. 작업을 시작하기 전에 반드시 참고할 자료
 
 ### A. 공식 게임 룰북 PDF
-우선 Bang_online/docs/BANG_Card_List.pdf 를 읽고 게임 규칙을 정리한다. 룰북에 있는 규칙을 **일반적인 BANG! 지식보다 우선한다.** 또한, docs/에 있는 Bang_나무위키_룰북.md 또한 비공식적 룰북이니 이를 참고할 것. 만일 룰북과 기존 코드베이스가 충돌한다면 룰북을 source of truth로 취급한다.
+우선 `Bang_online/docs/BANG_Card_List.pdf` 와 `뱅 룰북 한글판.pdf` 를 읽고 게임 규칙을 정리한다. 룰북에 있는 규칙을 **일반적인 BANG! 지식보다 우선한다.** 또한, docs/에 있는 `Bang_나무위키_룰북.md` 또한 비공식적 룰북이니 이를 참고할 것. 만일 룰북과 기존 코드베이스가 충돌한다면 룰북을 source of truth로 취급한다.
 
-
-### B. 기존 Discord BANG! 봇
+### B. 기존 Discord BANG! 봇 repository
 discord_bang_bot repository는 BANG!을 Discord bot으로 구현하려다가 중단한 코드이다. 해당 코드들을 모두 읽고,\
 1) 재사용 가능한 로직을 추출하고
 2) role.py에서 역할별 목표(__ROLE_LIST__)와 플레이어 수에 따른 역할 분배(__RolePerPlayer__), character.py에서 캐릭터별 hp와 효과 (__CHARACTER_LIST__), cards.py에서 카드별 문양과 번호, 카드 개수, 번역명, 효과 등의 내용(__CARD_DB__)을 가져와서 사용할 것.

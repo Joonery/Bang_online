@@ -1,0 +1,94 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <meta name="theme-color" content="#21140d">
+  <title>BANG! Online</title>
+  <link rel="stylesheet" href="/styles.css">
+</head>
+<body>
+  <div class="grain"></div>
+  <main>
+    <section id="home" class="home-view">
+      <div class="brand-lockup"><span class="brand-kicker">THE WILD WEST CARD GAME</span><h1>BANG!</h1><p>법과 무법이 총구 끝에서 만나는 밤</p></div>
+      <article class="wanted-panel">
+        <span class="eyebrow" id="home-mode">WANTED · 4–7 PLAYERS</span>
+        <h2 id="home-title">새 게임 만들기</h2>
+        <p id="home-copy">방을 만들고 초대 링크를 친구들에게 보내세요. 게임은 이 서버에 하나만 열립니다.</p>
+        <form id="entry-form">
+          <label for="nickname">별명</label>
+          <input id="nickname" maxlength="18" autocomplete="nickname" placeholder="서부에서 불릴 이름" required>
+          <button class="primary" type="submit" id="entry-button">방 만들기</button>
+        </form>
+        <button class="text-button hidden" id="forget-session">저장된 접속 정보 지우기</button>
+        <p class="error-copy" id="home-error"></p>
+      </article>
+      <p class="home-foot">설치 없음 · 계정 없음 · 서버 메모리에만 저장</p>
+    </section>
+
+    <section id="game" class="game-view hidden">
+      <header class="topbar">
+        <div class="mini-brand"><b>BANG!</b><span id="connection">연결 중…</span></div>
+        <div class="header-actions">
+          <button data-dialog="dictionary">카드 사전</button><button data-dialog="rules">룰북</button><button id="social-toggle">로그 · 채팅 <i id="chat-dot" class="hidden"></i></button>
+        </div>
+      </header>
+
+      <div class="desktop-layout">
+      <div class="table-shell">
+        <div class="table-felt">
+          <div id="players" class="players-ring"></div>
+          <section class="center-stage">
+            <div class="deck-area">
+              <div class="deck-stack"><span>BANG!</span></div><small>카드 더미 <b id="deck-count">0</b></small>
+            </div>
+            <article class="turn-poster"><span id="phase-kicker">입장 대기</span><h2 id="turn-title">무법자들을 기다리는 중</h2><p id="turn-copy">4명 이상 모이면 방장이 게임을 시작할 수 있습니다.</p><div id="actions" class="actions"></div></article>
+            <div class="discard-area"><div id="discard-card" class="mini-card empty"><span>버린 카드</span></div><small>버린 카드 더미</small></div>
+          </section>
+        </div>
+
+        <section class="hand-dock">
+          <div class="identity-panel"><div id="my-character" class="portrait"></div><div><small id="my-role">역할 대기</small><strong id="my-name">-</strong><span id="my-hp">♡</span></div></div>
+          <div class="hand-heading"><span>내 손패</span><small id="hand-help">카드를 눌러 사용하세요.</small></div>
+          <div id="hand" class="hand"></div>
+        </section>
+      </div>
+      <aside id="social-panel" class="social-dock">
+        <header><div><small>SALOON</small><h2>게임 기록과 채팅</h2></div><button id="social-close" aria-label="닫기">×</button></header>
+        <div class="social-tabs"><button data-tab="log" class="active">게임 기록</button><button data-tab="chat">채팅</button></div>
+        <div id="log-list" class="scroll-list"></div>
+        <div id="chat-list" class="scroll-list hidden"></div>
+        <form id="chat-form" class="hidden"><input id="chat-input" maxlength="300" placeholder="메시지 입력" autocomplete="off"><button>보내기</button></form>
+      </aside>
+      </div>
+    </section>
+  </main>
+
+  <dialog id="rules-dialog" class="reference-dialog"><header><div><small>QUICK REFERENCE</small><h2>황야의 규칙</h2></div><button class="close-dialog" aria-label="닫기">×</button></header><div id="rules-content" class="dialog-content"></div><footer><a href="/docs/rulebook.pdf" target="_blank" rel="noopener">한글 룰북 PDF 열기</a></footer></dialog>
+  <dialog id="dictionary-dialog" class="reference-dialog wide"><header><div><small>80 PLAYING CARDS</small><h2>카드 사전</h2></div><button class="close-dialog" aria-label="닫기">×</button></header><div id="dictionary-content" class="dialog-content card-catalog"></div></dialog>
+  <dialog id="choice-dialog" class="choice-dialog"><header><h2 id="choice-title">선택</h2><button class="close-dialog" aria-label="닫기">×</button></header><p id="choice-copy"></p><div id="choice-options" class="choice-options"></div></dialog>
+  <dialog id="character-dialog" class="character-dialog"><header><div><small>CHOOSE YOUR GUNSLINGER</small><h2>인물 카드 선택</h2></div></header><p>아래 두 인물 중 이번 게임에서 사용할 한 명을 선택하세요.</p><div id="character-options" class="character-options"></div></dialog>
+  <div id="setup-overlay" class="setup-overlay hidden" aria-live="polite"><article><div id="setup-icon" class="setup-icon">★</div><div class="setup-steps"><i class="active"></i><i></i><i></i></div><small id="setup-kicker">GAME SETUP</small><h2 id="setup-title">역할 카드를 섞는 중…</h2><p id="setup-copy">각자의 운명이 곧 결정됩니다.</p><div class="setup-cards"><span></span><span></span><span></span></div></article></div>
+  <div id="judgment-overlay" class="judgment-overlay hidden" aria-live="assertive">
+    <article>
+      <small id="judgment-kicker">SHOWDOWN</small>
+      <h2 id="judgment-title">판정 카드를 뒤집습니다</h2>
+      <div id="judgment-card" class="judgment-card hidden"></div>
+      <p id="judgment-copy">운명이 결정되는 순간입니다.</p>
+    </article>
+  </div>
+  <div id="victory-overlay" class="victory-overlay hidden" aria-live="assertive">
+    <div class="victory-burst" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div>
+    <article>
+      <small>THE DUEL IS OVER</small><h2>승리!</h2>
+      <div id="victory-roles" class="victory-roles"></div>
+      <h3 id="victory-title">보안관 진영 승리</h3>
+      <p id="victory-copy">황야의 결투가 끝났습니다.</p>
+      <button id="victory-close" class="primary">결과 확인</button>
+    </article>
+  </div>
+  <div id="toast" class="toast"></div>
+  <script type="module" src="/app.js"></script>
+</body>
+</html>
