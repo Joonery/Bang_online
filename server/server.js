@@ -19,10 +19,21 @@ let setupTimer = null;
 const streams = new Map();
 const id = (bytes = 12) => randomBytes(bytes).toString("base64url");
 
-function makeSession(nickname) {
+function closeSession(activeSession, reason) {
+  if (!activeSession || session !== activeSession) return false;
+  session = null;
   if (setupTimer) { clearTimeout(setupTimer); setupTimer = null; }
-  for (const response of streams.values()) response.end();
+  const responses = [...streams.values()];
   streams.clear();
+  for (const response of responses) {
+    writeEvent(response, "session_closed", { reason });
+    response.end();
+  }
+  return true;
+}
+
+function makeSession(nickname) {
+  if (session) closeSession(session, "새로운 방이 열렸습니다.");
   const game = new BangGame(); const playerId = id(8); const token = id(24);
   game.addPlayer({ id: playerId, token, nickname, host: true });
   session = { id: id(9), game, chat: [], createdAt: Date.now() };
@@ -75,10 +86,19 @@ async function api(request, response, url) {
   if (request.method === "GET" && url.pathname === "/api/health") return sendJson(response, 200, { ok: true, session: Boolean(session), uptime: Math.round(process.uptime()) });
   if (request.method === "GET" && url.pathname === "/api/events") {
     const player = requirePlayer(url.searchParams.get("token"));
+    const activeSession = session;
     response.writeHead(200, { "content-type": "text/event-stream; charset=utf-8", "cache-control": "no-cache, no-transform", connection: "keep-alive", "x-accel-buffering": "no" });
     const old = streams.get(player.token); if (old && old !== response) old.end();
     streams.set(player.token, response); player.connected = true; writeEvent(response, "state", stateFor(player, true)); broadcast();
-    request.on("close", () => { if (streams.get(player.token) === response) { streams.delete(player.token); player.connected = false; broadcast(); } });
+    request.on("close", () => {
+      if (streams.get(player.token) !== response) return;
+      streams.delete(player.token); player.connected = false;
+      const hostLeftLobby = activeSession.game.phase === "lobby" && player.id === activeSession.game.hostId;
+      const everyoneLeft = activeSession.game.players.every((item) => !item.connected);
+      if (hostLeftLobby) closeSession(activeSession, "게임 시작 전에 방장이 나가 방이 닫혔습니다.");
+      else if (everyoneLeft) closeSession(activeSession, "모든 참가자가 나가 방이 닫혔습니다.");
+      else if (session === activeSession) broadcast();
+    });
     return;
   }
   if (request.method !== "POST") return sendJson(response, 405, { error: "허용되지 않은 요청입니다." });

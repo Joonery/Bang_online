@@ -30,6 +30,10 @@ function connect() {
     $("#home").classList.add("hidden"); $("#game").classList.remove("hidden"); render(); handleSetup(previousPhase); handleJudgment(); handleVictory();
   });
   source.addEventListener("chat", (event) => { if (!$('[data-tab="chat"]').classList.contains("active")) $("#chat-dot").classList.remove("hidden"); const message = JSON.parse(event.data); if (state) { state.chat.push(message); renderSocial(); } });
+  source.addEventListener("session_closed", () => {
+    source.close(); source = null; token = null; localStorage.removeItem("bang.token");
+    const homeUrl = new URL(location.href); homeUrl.search = ""; homeUrl.hash = ""; location.replace(homeUrl);
+  });
   source.onerror = () => { $("#connection").textContent = "재연결 중…"; };
 }
 
