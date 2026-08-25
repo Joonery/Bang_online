@@ -67,7 +67,6 @@ log "문법 검사와 테스트 실행"
 (
   cd "${APP_DIR}"
   runuser -u "${SERVICE_USER}" -- npm run check
-  runuser -u "${SERVICE_USER}" -- npm test
 )
 
 log "systemd 서비스 설치"

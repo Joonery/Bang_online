@@ -13,6 +13,8 @@ let roleIntroShown = false;
 let judgmentHideTimer = null;
 let lastAnnouncementId = null;
 let victoryDismissed = false;
+let unreadChat = false;
+const mobileSocialQuery = window.matchMedia("(max-width: 980px)");
 const joinId = new URLSearchParams(location.search).get("join");
 
 function escapeHtml(value) { return String(value).replace(/[&<>'"]/g, (char) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", "'": "&#39;", '"': "&quot;" })[char]); }
@@ -29,7 +31,14 @@ function connect() {
     delete next.logDelta; next.chat ??= state?.chat ?? []; state = next;
     $("#home").classList.add("hidden"); $("#game").classList.remove("hidden"); render(); handleSetup(previousPhase); handleJudgment(); handleVictory();
   });
-  source.addEventListener("chat", (event) => { if (!$('[data-tab="chat"]').classList.contains("active")) $("#chat-dot").classList.remove("hidden"); const message = JSON.parse(event.data); if (state) { state.chat.push(message); renderSocial(); } });
+  source.addEventListener("chat", (event) => {
+    const message = JSON.parse(event.data);
+    if (state) {
+      state.chat.push(message); renderSocial();
+      if (message.playerId !== state.me && !isChatVisible()) unreadChat = true;
+      renderChatAlerts();
+    }
+  });
   source.addEventListener("session_closed", () => {
     source.close(); source = null; token = null; localStorage.removeItem("bang.token");
     const homeUrl = new URL(location.href); homeUrl.search = ""; homeUrl.hash = ""; location.replace(homeUrl);
@@ -78,7 +87,7 @@ function renderPlayers(me) {
     const equipment = player.equipment.map((card) => `<span title="${escapeHtml(card.description)}"><img src="${cardImage(card)}" alt="${escapeHtml(card.name)}"></span>`).join("");
     const avatar = player.character ? `<img class="avatar" src="${imagePath("character_card", player.character.image)}" alt="${player.character.name}">` : `<span class="avatar avatar-back">★</span>`;
     const health = player.maxHp ? `${"♥".repeat(Math.max(0, player.hp))} ${player.hp}/${player.maxHp}` : player.character ? "인물 선택 완료" : "준비 중";
-    node.innerHTML = `<div class="seat-card">${avatar}<div class="seat-copy"><strong>${escapeHtml(player.nickname)}</strong><span>${player.alive ? health : "제거됨"}</span><small>${player.character?.name ?? "인물 선택 중"} · 손 ${player.handCount}장${player.distance ? ` · 거리 ${player.distance}` : ""}</small></div>${role}</div><div class="equipment-row">${equipment}</div><i class="connection-dot ${player.connected ? "online" : ""}"></i>`;
+    node.innerHTML = `<div class="seat-card">${avatar}<div class="seat-copy"><strong>${escapeHtml(player.nickname)}</strong><span>${player.alive ? health : "제거됨"}</span><small>${player.character?.name ?? "인물 선택 중"} · ${player.handCount}장</small></div>${role}</div><div class="equipment-row">${equipment}</div><i class="connection-dot ${player.connected ? "online" : ""}"></i>`;
     ring.append(node);
   });
 }
@@ -286,6 +295,15 @@ function renderSocial() {
   const chat = $("#chat-list"); const chatBottom = chat.scrollHeight - chat.scrollTop - chat.clientHeight < 80; chat.innerHTML = state.chat.map((message) => `<article class="chat ${message.playerId === state.me ? "mine" : ""}"><small>${escapeHtml(message.nickname)}</small><p>${escapeHtml(message.text)}</p></article>`).join("") || `<p class="empty-note">아직 채팅이 없습니다.</p>`; if (chatBottom) chat.scrollTop = chat.scrollHeight;
 }
 
+function isSocialPanelVisible() { return !mobileSocialQuery.matches || $("#social-panel").classList.contains("mobile-open"); }
+function isChatVisible() { return document.visibilityState === "visible" && isSocialPanelVisible() && $('[data-tab="chat"]').classList.contains("active"); }
+function renderChatAlerts() {
+  $("#chat-tab-dot").classList.toggle("hidden", !unreadChat);
+  const showTopAlert = unreadChat && mobileSocialQuery.matches && !$("#social-panel").classList.contains("mobile-open");
+  $("#chat-dot").classList.toggle("hidden", !showTopAlert);
+}
+function markChatRead() { unreadChat = false; renderChatAlerts(); }
+
 async function copyInvite() { const url = inviteUrl || `${location.origin}/?join=${state.sessionId}`; try { await navigator.clipboard.writeText(url); } catch { prompt("초대 링크를 복사하세요.", url); } showToast("초대 링크를 복사했습니다."); }
 async function restart() { try { await request("/api/restart", { token }); } catch (error) { showToast(error.message); } }
 
@@ -296,9 +314,12 @@ function buildReferences() {
 
 $$('[data-dialog]').forEach((button) => button.addEventListener("click", () => { $(`#${button.dataset.dialog}-dialog`).showModal(); }));
 $$('.close-dialog').forEach((button) => button.addEventListener("click", () => button.closest("dialog").close()));
-$("#social-toggle").addEventListener("click", () => $("#social-panel").classList.add("mobile-open"));
-$("#social-close").addEventListener("click", () => $("#social-panel").classList.remove("mobile-open"));
-$$('[data-tab]').forEach((button) => button.addEventListener("click", () => { $$('[data-tab]').forEach((x) => x.classList.toggle("active", x === button)); $("#log-list").classList.toggle("hidden", button.dataset.tab !== "log"); $("#chat-list").classList.toggle("hidden", button.dataset.tab !== "chat"); $("#chat-form").classList.toggle("hidden", button.dataset.tab !== "chat"); if (button.dataset.tab === "chat") $("#chat-dot").classList.add("hidden"); }));
+$("#social-toggle").addEventListener("click", () => { $("#social-panel").classList.add("mobile-open"); if (isChatVisible()) markChatRead(); else renderChatAlerts(); });
+$("#social-close").addEventListener("click", () => { $("#social-panel").classList.remove("mobile-open"); renderChatAlerts(); });
+$$('[data-tab]').forEach((button) => button.addEventListener("click", () => { $$('[data-tab]').forEach((x) => x.classList.toggle("active", x === button)); $("#log-list").classList.toggle("hidden", button.dataset.tab !== "log"); $("#chat-list").classList.toggle("hidden", button.dataset.tab !== "chat"); $("#chat-form").classList.toggle("hidden", button.dataset.tab !== "chat"); if (button.dataset.tab === "chat" && isSocialPanelVisible()) markChatRead(); else renderChatAlerts(); }));
+const handleSocialViewportChange = () => { if (isChatVisible()) markChatRead(); else renderChatAlerts(); };
+if (mobileSocialQuery.addEventListener) mobileSocialQuery.addEventListener("change", handleSocialViewportChange); else mobileSocialQuery.addListener(handleSocialViewportChange);
+document.addEventListener("visibilitychange", () => { if (isChatVisible()) markChatRead(); });
 $("#character-dialog").addEventListener("cancel", (event) => event.preventDefault());
 $("#victory-close").addEventListener("click", () => { victoryDismissed = true; $("#victory-overlay").classList.add("hidden"); });
 $("#chat-form").addEventListener("submit", async (event) => { event.preventDefault(); const input = $("#chat-input"); const text = input.value.trim(); if (!text) return; input.value = ""; try { await request("/api/chat", { token, text }); } catch (error) { showToast(error.message); } });

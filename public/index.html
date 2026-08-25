@@ -24,7 +24,6 @@
         <button class="text-button hidden" id="forget-session">저장된 접속 정보 지우기</button>
         <p class="error-copy" id="home-error"></p>
       </article>
-      <p class="home-foot">설치 없음 · 계정 없음 · 서버 메모리에만 저장</p>
     </section>
 
     <section id="game" class="game-view hidden">
@@ -56,7 +55,7 @@
       </div>
       <aside id="social-panel" class="social-dock">
         <header><div><small>SALOON</small><h2>게임 기록과 채팅</h2></div><button id="social-close" aria-label="닫기">×</button></header>
-        <div class="social-tabs"><button data-tab="log" class="active">게임 기록</button><button data-tab="chat">채팅</button></div>
+        <div class="social-tabs"><button data-tab="log" class="active">게임 기록</button><button data-tab="chat">채팅 <i id="chat-tab-dot" class="chat-alert-dot hidden" aria-hidden="true"></i></button></div>
         <div id="log-list" class="scroll-list"></div>
         <div id="chat-list" class="scroll-list hidden"></div>
         <form id="chat-form" class="hidden"><input id="chat-input" maxlength="300" placeholder="메시지 입력" autocomplete="off"><button>보내기</button></form>
