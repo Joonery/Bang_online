@@ -304,7 +304,21 @@ function renderChatAlerts() {
 }
 function markChatRead() { unreadChat = false; renderChatAlerts(); }
 
-async function copyInvite() { const url = inviteUrl || `${location.origin}/?join=${state.sessionId}`; try { await navigator.clipboard.writeText(url); } catch { prompt("초대 링크를 복사하세요.", url); } showToast("초대 링크를 복사했습니다."); }
+async function copyInvite() {
+  const url = inviteUrl || `${location.origin}/?join=${state.sessionId}`;
+  let copied = false;
+  try {
+    if (!navigator.clipboard?.writeText) throw new Error("Clipboard API unavailable");
+    await navigator.clipboard.writeText(url); copied = true;
+  } catch {
+    const fallback = document.createElement("textarea");
+    fallback.value = url; fallback.readOnly = true; fallback.setAttribute("aria-hidden", "true");
+    fallback.style.position = "fixed"; fallback.style.left = "-9999px"; fallback.style.opacity = "0";
+    document.body.append(fallback); fallback.select(); fallback.setSelectionRange(0, url.length);
+    copied = document.execCommand("copy"); fallback.remove();
+  }
+  showToast(copied ? "초대 링크를 클립보드에 복사했습니다." : "링크를 복사하지 못했습니다. 브라우저 권한을 확인하세요.");
+}
 async function restart() { try { await request("/api/restart", { token }); } catch (error) { showToast(error.message); } }
 
 function buildReferences() {
