@@ -80,7 +80,7 @@ function render() {
 }
 
 function renderPlayers(me) {
-  const ring = $("#players"); ring.replaceChildren();
+  const ring = $("#players"); ring.className = `players-ring player-count-${state.players.length}`; ring.replaceChildren();
   state.players.forEach((player, index) => {
     const node = document.createElement("article"); node.className = `player-seat seat-${index} ${player.id === state.currentPlayerId ? "current" : ""} ${!player.alive ? "dead" : ""}`;
     const role = player.role ? `<img class="role-chip" src="${imagePath("role_card", player.role.image)}" alt="${player.role.name}">` : `<span class="role-back">?</span>`;

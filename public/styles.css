@@ -95,3 +95,31 @@ dialog[open]{animation:dialogIn .3s cubic-bezier(.16,1,.3,1) both}dialog[open]::
 @media(prefers-reduced-motion:reduce){*,*::before,*::after{animation-duration:.01ms!important;animation-iteration-count:1!important;transition-duration:.01ms!important}}
 
 .bot-badge{display:inline-block;margin-right:6px;padding:1px 4px;border:1px solid #d2a451;border-radius:8px;color:#f4cf79;font:800 .5rem Arial,sans-serif;letter-spacing:.08em;vertical-align:2px}
+
+/* Seven seats use a complete ellipse instead of placing the last seat inside the table. */
+.player-count-7::before{content:"";position:absolute;inset:7% 8% 10%;z-index:1;pointer-events:none;border:1px solid #d9ad5b24;border-radius:50%;box-shadow:0 0 28px #d9ad5b0d,inset 0 0 28px #d9ad5b0a}
+.player-count-7 .player-seat{width:210px}
+.player-count-7 .seat-0{left:50%;right:auto;top:auto;bottom:18px;transform:translateX(-50%)}
+.player-count-7 .seat-1{left:16%;right:auto;top:auto;bottom:13%;transform:translateX(-50%)}
+.player-count-7 .seat-2{left:1.5%;right:auto;top:39%;bottom:auto;transform:translateY(-50%)}
+.player-count-7 .seat-3{left:27%;right:auto;top:18px;bottom:auto;transform:translateX(-50%)}
+.player-count-7 .seat-4{left:auto;right:27%;top:18px;bottom:auto;transform:translateX(50%)}
+.player-count-7 .seat-5{left:auto;right:1.5%;top:39%;bottom:auto;transform:translateY(-50%)}
+.player-count-7 .seat-6{left:auto;right:16%;top:auto;bottom:13%;transform:translateX(50%)}
+
+@media(max-width:1180px){
+  .player-count-7 .player-seat{width:180px}
+  .player-count-7 .seat-1{left:17%}.player-count-7 .seat-6{right:17%}
+}
+
+@media(max-width:620px){
+  .player-count-7::before{inset:5% 7% 8%}
+  .player-count-7 .player-seat{width:142px}
+  .player-count-7 .seat-0{bottom:8px}
+  .player-count-7 .seat-1{left:20%;bottom:15%}
+  .player-count-7 .seat-2{left:4px;top:25%}
+  .player-count-7 .seat-3{left:24%;top:8px}
+  .player-count-7 .seat-4{right:24%;top:8px}
+  .player-count-7 .seat-5{right:4px;top:25%}
+  .player-count-7 .seat-6{right:20%;bottom:15%}
+}
