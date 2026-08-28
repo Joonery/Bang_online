@@ -93,3 +93,5 @@ dialog[open]{animation:dialogIn .3s cubic-bezier(.16,1,.3,1) both}dialog[open]::
 @media(max-width:620px){.equipment-row{height:35px;gap:3px}.equipment-row img{width:22px;height:31px}}
 
 @media(prefers-reduced-motion:reduce){*,*::before,*::after{animation-duration:.01ms!important;animation-iteration-count:1!important;transition-duration:.01ms!important}}
+
+.bot-badge{display:inline-block;margin-right:6px;padding:1px 4px;border:1px solid #d2a451;border-radius:8px;color:#f4cf79;font:800 .5rem Arial,sans-serif;letter-spacing:.08em;vertical-align:2px}

@@ -4,6 +4,7 @@ import { extname, join, normalize } from "node:path";
 import { fileURLToPath } from "node:url";
 import { randomBytes } from "node:crypto";
 import { BangGame } from "../engine/game.js";
+import { BotManager, chooseUniqueBotName } from "./rule-based-bot.js";
 
 const root = fileURLToPath(new URL("..", import.meta.url));
 const publicRoot = join(root, "public");
@@ -22,6 +23,7 @@ const id = (bytes = 12) => randomBytes(bytes).toString("base64url");
 
 function closeSession(activeSession, reason) {
   if (!activeSession || session !== activeSession) return false;
+  activeSession.botManager?.destroy();
   session = null;
   if (setupTimer) { clearTimeout(setupTimer); setupTimer = null; }
   const responses = [...streams.values()];
@@ -37,7 +39,8 @@ function makeSession(nickname) {
   if (session) closeSession(session, "새로운 방이 열렸습니다.");
   const game = new BangGame(); const playerId = id(8); const token = id(24);
   game.addPlayer({ id: playerId, token, nickname, host: true });
-  session = { id: id(9), game, chat: [], createdAt: Date.now() };
+  session = { id: id(9), game, chat: [], createdAt: Date.now(), botManager: null };
+  attachBotManager(session);
   return { playerId, token };
 }
 
@@ -64,10 +67,10 @@ async function readJson(request) {
 
 function writeEvent(response, type, data) { response.write(`event: ${type}\ndata: ${JSON.stringify(data)}\n\n`); }
 function pushState(player) { const response = streams.get(player.token); if (response) writeEvent(response, "state", stateFor(player)); }
-function broadcast() { if (!session) return; session.game.players.forEach(pushState); }
+function broadcast() { if (!session) return; session.game.players.filter((player) => !player.isBot).forEach(pushState); }
 
-function action(player, payload) {
-  const game = session.game; const type = payload?.type;
+function dispatchAction(game, player, payload) {
+  const type = payload?.type;
   if (type === "start") game.start(player.id);
   else if (type === "chooseCharacter") game.chooseCharacter(player.id, payload.characterId);
   else if (type === "play") game.playCard(player.id, payload.cardId, payload.targetId, payload.targetCardId);
@@ -83,6 +86,47 @@ function action(player, payload) {
   else throw new Error("알 수 없는 행동입니다.");
 }
 
+function attachBotManager(activeSession) {
+  const minimum = Math.max(0, Number(process.env.BOT_MIN_DELAY_MS || 1200));
+  const maximum = Math.max(minimum, Number(process.env.BOT_MAX_DELAY_MS || 3200));
+  activeSession.botManager = new BotManager({
+    minDelayMs: minimum,
+    maxDelayMs: maximum,
+    getState: (botId) => session === activeSession ? structuredClone(activeSession.game.viewFor(botId)) : null,
+    perform: (botId, payload) => {
+      if (session !== activeSession) return { ok: false, error: "세션이 종료되었습니다." };
+      const player = activeSession.game.player(botId);
+      if (!player?.isBot) return { ok: false, error: "봇 플레이어를 찾을 수 없습니다." };
+      try {
+        dispatchAction(activeSession.game, player, payload);
+        afterGameMutation(activeSession);
+        return { ok: true };
+      } catch (error) { return { ok: false, error: error.message }; }
+    }
+  });
+  activeSession.game.players.filter((player) => player.isBot).forEach((player) => activeSession.botManager.add(player.id));
+}
+
+function scheduleSetup(activeSession) {
+  if (activeSession.game.phase !== "dealing" || setupTimer) return;
+  const delay = Math.max(10, Number(process.env.SETUP_DELAY_MS || 2200));
+  setupTimer = setTimeout(() => {
+    setupTimer = null;
+    if (session === activeSession && activeSession.game.phase === "dealing") {
+      activeSession.game.finishSetup();
+      afterGameMutation(activeSession);
+    }
+  }, delay);
+  setupTimer.unref?.();
+}
+
+function afterGameMutation(activeSession = session) {
+  if (!activeSession || session !== activeSession) return;
+  broadcast();
+  scheduleSetup(activeSession);
+  activeSession.botManager?.poke();
+}
+
 async function api(request, response, url) {
   if (request.method === "GET" && url.pathname === "/api/health") return sendJson(response, 200, { ok: true, session: Boolean(session), uptime: Math.round(process.uptime()) });
   if (request.method === "GET" && url.pathname === "/api/events") {
@@ -95,7 +139,7 @@ async function api(request, response, url) {
       if (streams.get(player.token) !== response) return;
       streams.delete(player.token); player.connected = false;
       const hostLeftLobby = activeSession.game.phase === "lobby" && player.id === activeSession.game.hostId;
-      const everyoneLeft = activeSession.game.players.every((item) => !item.connected);
+      const everyoneLeft = activeSession.game.players.filter((item) => !item.isBot).every((item) => !item.connected);
       if (hostLeftLobby) closeSession(activeSession, "게임 시작 전에 방장이 나가 방이 닫혔습니다.");
       else if (everyoneLeft) closeSession(activeSession, "모든 참가자가 나가 방이 닫혔습니다.");
       else if (session === activeSession) broadcast();
@@ -115,19 +159,22 @@ async function api(request, response, url) {
     const playerId = id(8); const token = id(24); session.game.addPlayer({ id: playerId, token, nickname: body.nickname });
     broadcast(); return sendJson(response, 200, { token, playerId, sessionId: session.id });
   }
+  if (url.pathname === "/api/bot") {
+    const player = requirePlayer(body.token);
+    if (session.game.phase !== "lobby") throw new Error("게임 시작 전에만 봇을 추가할 수 있습니다.");
+    if (player.id !== session.game.hostId) throw new Error("방장만 봇을 추가할 수 있습니다.");
+    if (session.game.players.length >= 7) throw new Error("봇을 포함한 참가자는 최대 7명입니다.");
+    const nickname = chooseUniqueBotName(session.game.players.map((item) => item.nickname));
+    const bot = session.game.addPlayer({ id: id(8), token: `bot_${id(18)}`, nickname, isBot: true });
+    session.botManager.add(bot.id);
+    afterGameMutation(session);
+    return sendJson(response, 200, { ok: true, playerId: bot.id, nickname: bot.nickname });
+  }
   if (url.pathname === "/api/reconnect") {
     const player = requirePlayer(body.token); return sendJson(response, 200, { ok: true, playerId: player.id, sessionId: session.id });
   }
   if (url.pathname === "/api/action") {
-    const player = requirePlayer(body.token); action(player, body.action); broadcast();
-    if (session.game.phase === "dealing" && !setupTimer) {
-      const activeSession = session;
-      const delay = Math.max(10, Number(process.env.SETUP_DELAY_MS || 2200));
-      setupTimer = setTimeout(() => {
-        setupTimer = null;
-        if (session === activeSession && session.game.phase === "dealing") { session.game.finishSetup(); broadcast(); }
-      }, delay);
-    }
+    const player = requirePlayer(body.token); dispatchAction(session.game, player, body.action); afterGameMutation(session);
     return sendJson(response, 200, { ok: true });
   }
   if (url.pathname === "/api/chat") {
@@ -140,9 +187,9 @@ async function api(request, response, url) {
     const player = requirePlayer(body.token); if (player.id !== session.game.hostId || session.game.phase !== "game_over") throw new Error("게임이 끝난 뒤 방장만 새 게임을 시작할 수 있습니다.");
     if (setupTimer) { clearTimeout(setupTimer); setupTimer = null; }
     const oldHostId = session.game.hostId;
-    const oldPlayers = session.game.players.map(({ id: pid, token: ptoken, nickname, connected }) => ({ id: pid, token: ptoken, nickname, connected }));
+    const oldPlayers = session.game.players.map(({ id: pid, token: ptoken, nickname, connected, isBot }) => ({ id: pid, token: ptoken, nickname, connected, isBot }));
     const game = new BangGame(); oldPlayers.forEach((item) => { const added = game.addPlayer({ ...item, host: item.id === oldHostId }); added.connected = item.connected; });
-    session.game = game; session.chat = []; broadcast(); return sendJson(response, 200, { ok: true });
+    session.botManager?.destroy(); session.game = game; session.chat = []; attachBotManager(session); afterGameMutation(session); return sendJson(response, 200, { ok: true });
   }
   return sendJson(response, 404, { error: "API를 찾을 수 없습니다." });
 }

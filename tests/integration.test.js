@@ -51,7 +51,7 @@ async function openEvents(token) {
   return { controller, nextEvent, nextState: (predicate) => nextEvent("state", predicate) };
 }
 
-test.before(async () => { child = spawn(process.execPath, ["server/server.js"], { cwd: process.cwd(), env: { ...process.env, PORT: String(port), SETUP_DELAY_MS: "10" }, stdio: "ignore" }); await waitForServer(); });
+test.before(async () => { child = spawn(process.execPath, ["server/server.js"], { cwd: process.cwd(), env: { ...process.env, PORT: String(port), SETUP_DELAY_MS: "10", BOT_MIN_DELAY_MS: "5", BOT_MAX_DELAY_MS: "8" }, stdio: "ignore" }); await waitForServer(); });
 test.after(() => child?.kill());
 
 test("방 생성·4인 참가·token 재접속·비공개 상태 필터링", async () => {
@@ -87,4 +87,23 @@ test("게임 전 방장이 나가면 참가자가 남아 있어도 세션을 닫
   assert.match(closed.reason, /방장이 나가/);
   await waitForSession(false);
   guestClient.controller.abort();
+});
+
+test("방장이 로비에서 중복 없는 봇을 추가하고 봇들이 인물 선택을 완료한다", async () => {
+  const host = await post("/api/create", { nickname: "사람 방장" });
+  const client = await openEvents(host.token); await client.nextState((state) => state.phase === "lobby");
+  const bots = [];
+  for (let index = 0; index < 6; index += 1) bots.push(await post("/api/bot", { token: host.token }));
+  assert.equal(new Set(bots.map((bot) => bot.nickname)).size, 6);
+  const fullState = await client.nextState((state) => state.phase === "lobby" && state.players.length === 7);
+  assert.equal(fullState.players.filter((player) => player.isBot).length, 6);
+  await assert.rejects(post("/api/bot", { token: host.token }), /최대 7명/);
+
+  await post("/api/action", { token: host.token, action: { type: "start" } });
+  const selection = await client.nextState((state) => state.phase === "character_selection" && state.characterOptions.length === 2);
+  await post("/api/action", { token: host.token, action: { type: "chooseCharacter", characterId: selection.characterOptions[0].id } });
+  const playing = await client.nextState((state) => state.phase === "playing");
+  assert.equal(playing.players.filter((player) => player.character).length, 7);
+  client.controller.abort();
+  await waitForSession(false);
 });

@@ -53,6 +53,30 @@ test("새 총을 장착하면 확인 절차 없이 기존 총을 버리고 즉�
   assert.ok(player.equipment.includes(newWeapon)); assert.ok(game.discard.includes(oldWeapon)); assert.equal(player.hand.includes(newWeapon), false);
 });
 
+test("보안관은 모든 캐릭터에서 기본 생명력보다 1 높은 수치까지 맥주로 회복한다", () => {
+  for (const character of CHARACTERS) {
+    const game = readyGame(4); const sheriff = game.current(); game.pending = null; game.turnPhase = "play";
+    sheriff.character = character;
+    sheriff.maxHp = character.hp; // 저장값이 오래되어도 역할과 캐릭터에서 최대치를 다시 계산해야 한다.
+    sheriff.hp = character.hp;
+    const beer = { id: `beer-${character.id}`, type: "beer", suit: "heart", rank: "6" };
+    sheriff.hand.push(beer);
+    game.playCard(sheriff.id, beer.id);
+    assert.equal(sheriff.hp, character.hp + 1, `${character.name} 보안관의 최대 생명력`);
+    assert.equal(sheriff.maxHp, character.hp + 1);
+  }
+});
+
+test("생존자가 둘뿐이면 일반 카드 사용 단계에서도 맥주를 사용할 수 없다", () => {
+  const game = readyGame(4); const player = game.current(); game.pending = null; game.turnPhase = "play";
+  game.players[2].alive = false; game.players[3].alive = false;
+  player.hp = game.maximumHp(player) - 1;
+  const beer = { id: "beer-two-alive", type: "beer", suit: "heart", rank: "6" };
+  player.hand.push(beer);
+  assert.throws(() => game.playCard(player.id, beer.id), /두 명뿐일 때는 맥주가 효과가 없습니다/);
+  assert.ok(player.hand.includes(beer));
+});
+
 test("게임 로그의 카드 문양은 영문 대신 아이콘으로 표시한다", () => {
   const game = readyGame(4);
   assert.match(game.cardLabel({ type: "bang", suit: "heart", rank: "A" }), /♥ A/);

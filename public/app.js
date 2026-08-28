@@ -87,7 +87,7 @@ function renderPlayers(me) {
     const equipment = player.equipment.map((card) => `<span title="${escapeHtml(card.description)}"><img src="${cardImage(card)}" alt="${escapeHtml(card.name)}"></span>`).join("");
     const avatar = player.character ? `<img class="avatar" src="${imagePath("character_card", player.character.image)}" alt="${player.character.name}">` : `<span class="avatar avatar-back">★</span>`;
     const health = player.maxHp ? `${"♥".repeat(Math.max(0, player.hp))} ${player.hp}/${player.maxHp}` : player.character ? "인물 선택 완료" : "준비 중";
-    node.innerHTML = `<div class="seat-card">${avatar}<div class="seat-copy"><strong>${escapeHtml(player.nickname)}</strong><span>${player.alive ? health : "제거됨"}</span><small>${player.character?.name ?? "인물 선택 중"} · ${player.handCount}장</small></div>${role}</div><div class="equipment-row">${equipment}</div><i class="connection-dot ${player.connected ? "online" : ""}"></i>`;
+    node.innerHTML = `<div class="seat-card">${avatar}<div class="seat-copy"><strong>${player.isBot ? '<em class="bot-badge">BOT</em>' : ""}${escapeHtml(player.nickname)}</strong><span>${player.alive ? health : "제거됨"}</span><small>${player.character?.name ?? "인물 선택 중"} · ${player.handCount}장</small></div>${role}</div><div class="equipment-row">${equipment}</div><i class="connection-dot ${player.connected ? "online" : ""}"></i>`;
     ring.append(node);
   });
 }
@@ -130,7 +130,7 @@ function renderCenter(me) {
   const [kicker, title, copy] = phaseCopy(me); $("#phase-kicker").textContent = kicker; $("#turn-title").textContent = title; $("#turn-copy").textContent = copy;
   const actions = $("#actions"); actions.replaceChildren();
   if (state.phase === "lobby") {
-    if (state.hostId === state.me) { actions.append(actionButton("초대 링크 복사", copyInvite)); actions.append(actionButton("게임 시작", () => send({ type: "start" }), "primary", state.players.length < 4)); }
+    if (state.hostId === state.me) { actions.append(actionButton("초대 링크 복사", copyInvite)); actions.append(actionButton("봇 추가", addBot, "", state.players.length >= 7)); actions.append(actionButton("게임 시작", () => send({ type: "start" }), "primary", state.players.length < 4)); }
     return;
   }
   if (["character_selection", "dealing"].includes(state.phase)) return;
@@ -320,6 +320,10 @@ async function copyInvite() {
   showToast(copied ? "초대 링크를 클립보드에 복사했습니다." : "링크를 복사하지 못했습니다. 브라우저 권한을 확인하세요.");
 }
 async function restart() { try { await request("/api/restart", { token }); } catch (error) { showToast(error.message); } }
+async function addBot() {
+  try { const result = await request("/api/bot", { token }); showToast(`${result.nickname} 봇이 참가했습니다.`); }
+  catch (error) { showToast(error.message); }
+}
 
 function buildReferences() {
   $("#rules-content").innerHTML = `<div class="rule-grid">${RULE_SUMMARY.map(([title, body]) => `<article><span>✦</span><div><h3>${escapeHtml(title)}</h3><p>${escapeHtml(body)}</p></div></article>`).join("")}</div><section class="role-grid">${Object.values(ROLES).map((role) => `<article><img src="${imagePath("role_card", role.image)}" alt="${role.name}"><div><h3>${role.name}</h3><p>${role.goal}</p></div></article>`).join("")}</section>`;

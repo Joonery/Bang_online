@@ -34,16 +34,16 @@ export class BangGame {
     this.serial = 0;
   }
 
-  addPlayer({ id, token, nickname, host = false }) {
+  addPlayer({ id, token, nickname, host = false, isBot = false }) {
     assert(this.phase === "lobby", "게임이 시작되어 참가할 수 없습니다.");
     assert(this.players.length < 7, "방이 가득 찼습니다.");
     const clean = String(nickname ?? "").trim().slice(0, 18);
     assert(clean.length >= 1, "닉네임을 입력하세요.");
     assert(!this.players.some((p) => p.nickname.toLowerCase() === clean.toLowerCase()), "이미 사용 중인 닉네임입니다.");
-    const player = { id, token, nickname: clean, connected: false, alive: true, role: null, character: null, hp: 0, maxHp: 0, hand: [], equipment: [], bangUsed: 0 };
+    const player = { id, token, nickname: clean, connected: Boolean(isBot), isBot: Boolean(isBot), alive: true, role: null, character: null, hp: 0, maxHp: 0, hand: [], equipment: [], bangUsed: 0 };
     this.players.push(player);
     if (host || !this.hostId) this.hostId = id;
-    this.addLog(`${clean}님이 방에 참가했습니다.`, "system");
+    this.addLog(`${clean}${isBot ? " 봇" : "님"}이 방에 참가했습니다.`, "system", { kind: "join", playerId: id, isBot: Boolean(isBot) });
     return player;
   }
 
@@ -91,7 +91,7 @@ export class BangGame {
     this.deck = shuffle(BASE_DECK.map((card) => ({ ...card, id: `c${++this.serial}` })));
     this.discard = [];
     this.players.forEach((player) => {
-      player.maxHp = player.character.hp + (player.role === "sheriff" ? 1 : 0);
+      player.maxHp = this.maximumHp(player);
       player.hp = player.maxHp;
       for (let n = 0; n < player.hp; n += 1) player.hand.push(this.drawOne());
     });
@@ -106,8 +106,8 @@ export class BangGame {
     this.beginTurn();
   }
 
-  addLog(text, tone = "normal") {
-    this.log.push({ id: `l${++this.serial}`, text, tone, at: Date.now() });
+  addLog(text, tone = "normal", meta = null) {
+    this.log.push({ id: `l${++this.serial}`, text, tone, at: Date.now(), ...(meta ? { meta } : {}) });
     if (this.log.length > 240) this.log.shift();
     this.revision += 1;
   }
@@ -142,7 +142,7 @@ export class BangGame {
     this.turnPhase = "start";
     this.pending = null;
     this.bangUsed = 0;
-    this.addLog(`${current.nickname}님의 차례입니다.`, "turn");
+    this.addLog(`${current.nickname}님의 차례입니다.`, "turn", { kind: "turn", playerId: current.id });
     if (this.equipment(current, "dynamite")) return this.requestJudgment(current, "dynamite");
     this.afterDynamite(current);
   }
@@ -321,7 +321,13 @@ export class BangGame {
     assert(info.kind !== "response", "이 카드는 공격에 대응할 때 사용합니다.");
     this.validateCardPlay(player, card, targetId, targetCardId);
     player.hand.splice(index, 1);
-    this.addLog(`${player.nickname}님이 <${info.name}>을(를) 사용했습니다.`, "card");
+    const target = targetId ? this.player(targetId) : null;
+    const actionText = target
+      ? `${player.nickname}님이 ${target.nickname}님에게 <${info.name}>을(를) 사용했습니다.`
+      : `${player.nickname}님이 <${info.name}>을(를) 사용했습니다.`;
+    this.addLog(actionText, "card", {
+      kind: "card", actorId: player.id, targetId: target?.id ?? null, cardType: card.type
+    });
     this.checkSuzy(player);
     this.resolvePlayedCard(player, card, targetId, targetCardId);
   }
@@ -334,7 +340,10 @@ export class BangGame {
       assert(this.bangUsed === 0 || player.character.id === "willy" || this.equipment(player, "volcanic"), "이번 차례에는 이미 뱅!을 사용했습니다.");
       assert(this.distance(player.id, target.id) <= this.weaponRange(player), "대상이 뱅! 사정거리 밖에 있습니다.");
     }
-    if (card.type === "beer") assert(player.hp < player.maxHp && this.alive().length > 2, "지금은 맥주 효과를 받을 수 없습니다.");
+    if (card.type === "beer") {
+      assert(this.alive().length > 2, "생존자가 두 명뿐일 때는 맥주가 효과가 없습니다.");
+      assert(player.hp < this.maximumHp(player), "현재 생명력이 최대라 맥주 효과를 받을 수 없습니다.");
+    }
     if (card.type === "panic") assert(this.distance(player.id, target.id) <= 1, "강탈은 거리 1인 플레이어에게만 사용할 수 있습니다.");
     if (["panic", "cat_balou"].includes(card.type)) {
       const targetHandCount = target.id === player.id ? target.hand.length - 1 : target.hand.length;
@@ -372,7 +381,7 @@ export class BangGame {
     const player = this.player(playerId);
     assert(this.phase === "playing" && player?.alive, "지금은 능력을 쓸 수 없습니다.");
     assert(!this.pending || this.pending.responderId === playerId, "다른 플레이어의 응답을 기다리는 동안에는 능력을 쓸 수 없습니다.");
-    assert(player.character.id === "sid" && player.hp < player.maxHp, "시드 케첨의 능력을 쓸 수 없습니다.");
+    assert(player.character.id === "sid" && player.hp < this.maximumHp(player), "시드 케첨의 능력을 쓸 수 없습니다.");
     assert(Array.isArray(cardIds) && cardIds.length === 2 && new Set(cardIds).size === 2, "카드 두 장을 고르세요.");
     const chosen = cardIds.map((id) => player.hand.find((card) => card.id === id));
     assert(chosen.every(Boolean), "가지고 있는 카드 두 장을 고르세요.");
@@ -403,7 +412,9 @@ export class BangGame {
     const converted = player.character.id === "calamity" && ((allowed === "missed" && card.type === "bang") || (allowed === "bang" && card.type === "missed"));
     assert(card.type === allowed || converted, `이 상황에는 <${CARD_INFO[allowed].name}> 카드가 필요합니다.`);
     player.hand.splice(index, 1); this.discardCard(card); this.checkSuzy(player);
-    this.addLog(`${player.nickname}님이 <${CARD_INFO[card.type].name}>으로 응답했습니다.`, "card");
+    this.addLog(`${player.nickname}님이 <${CARD_INFO[card.type].name}>으로 응답했습니다.`, "card", {
+      kind: "response", actorId: player.id, cardType: card.type, pendingType: this.pending?.type ?? null
+    });
     return card;
   }
 
@@ -489,7 +500,9 @@ export class BangGame {
       this.checkSuzy(target);
     }
     if (steal) actor.hand.push(card); else this.discardCard(card);
-    this.addLog(`${actor.nickname}님이 ${target.nickname}님의 카드 한 장을 ${steal ? "가져왔습니다" : "버렸습니다"}.`);
+    this.addLog(`${actor.nickname}님이 ${target.nickname}님의 카드 한 장을 ${steal ? "가져왔습니다" : "버렸습니다"}.`, "normal", {
+      kind: "card_effect", actorId: actor.id, targetId: target.id, effect: steal ? "steal" : "discard"
+    });
   }
 
   endTurn(playerId) {
@@ -518,7 +531,9 @@ export class BangGame {
   damage(player, amount, attackerId, continuation, options = {}) {
     if (!player.alive) return this.resume(continuation);
     player.hp -= amount;
-    this.addLog(`${player.nickname}님이 생명력 ${amount}을 잃었습니다. (${Math.max(0, player.hp)}/${player.maxHp})`, "danger");
+    this.addLog(`${player.nickname}님이 생명력 ${amount}을 잃었습니다. (${Math.max(0, player.hp)}/${this.maximumHp(player)})`, "danger", {
+      kind: "damage", playerId: player.id, attackerId: attackerId ?? null, amount
+    });
     if (player.character.id === "bart") { this.draw(player, amount); this.addLog("바트 캐시디의 능력이 발동했습니다.", "ability"); }
     const attacker = attackerId ? this.player(attackerId) : null;
     if (player.character.id === "elgringo" && !options.ignoreElGringo && attacker?.hand.length) {
@@ -553,7 +568,9 @@ export class BangGame {
 
   eliminate(player, attackerId, continuation) {
     player.alive = false; player.hp = 0;
-    this.addLog(`${player.nickname}님이 제거되었습니다. 역할은 ${ROLES[player.role].name}입니다.`, "important");
+    this.addLog(`${player.nickname}님이 제거되었습니다. 역할은 ${ROLES[player.role].name}입니다.`, "important", {
+      kind: "elimination", playerId: player.id, attackerId: attackerId ?? null, role: player.role
+    });
     const cards = [...player.hand, ...player.equipment]; player.hand = []; player.equipment = [];
     const vulture = this.alive().find((p) => p.character.id === "vulture");
     if (vulture && cards.length) { vulture.hand.push(...cards); this.addLog(`벌쳐 샘이 제거된 플레이어의 카드 ${cards.length}장을 가져왔습니다.`, "ability"); }
@@ -596,7 +613,7 @@ export class BangGame {
   }
 
   heal(player, amount, announce = true) {
-    const before = player.hp; player.hp = Math.min(player.maxHp, player.hp + amount);
+    const before = player.hp; player.maxHp = this.maximumHp(player); player.hp = Math.min(player.maxHp, player.hp + amount);
     if (announce && player.hp > before) this.addLog(`${player.nickname}님이 생명력 ${player.hp - before}을 회복했습니다. (${player.hp}/${player.maxHp})`, "success");
     else this.revision += 1;
   }
@@ -608,6 +625,7 @@ export class BangGame {
   }
 
   equipment(player, type) { return player.equipment.find((card) => card.type === type); }
+  maximumHp(player) { return player?.character ? player.character.hp + (player.role === "sheriff" ? 1 : 0) : 0; }
   removeEquipment(player, type) { const i = player.equipment.findIndex((card) => card.type === type); return i < 0 ? null : player.equipment.splice(i, 1)[0]; }
   weaponRange(player) { return this.cardInfo(player.equipment.find((card) => CARD_INFO[card.type].kind === "weapon") ?? { type: "bang" }).range ?? 1; }
 
@@ -639,13 +657,13 @@ export class BangGame {
     const viewer = this.player(playerId); assert(viewer, "플레이어를 찾을 수 없습니다.");
     const pending = this.pending ? this.publicPending(this.pending, playerId) : null;
     return {
-      revision: this.revision, phase: this.phase, turnPhase: this.turnPhase, hostId: this.hostId,
+      revision: this.revision, phase: this.phase, turnPhase: this.turnPhase, hostId: this.hostId, bangUsed: this.bangUsed,
       me: playerId, currentPlayerId: this.phase === "playing" ? this.current()?.id ?? null : null, deckCount: this.deck.length,
       discardTop: this.discard.length ? this.publicCard(this.discard.at(-1)) : null,
       characterOptions: viewer.characterOptions?.map((character) => ({ ...character })) ?? [],
       players: this.players.map((player) => ({
-        id: player.id, nickname: player.nickname, connected: player.connected, alive: player.alive,
-        hp: player.hp, maxHp: player.maxHp, character: player.character,
+        id: player.id, nickname: player.nickname, connected: player.connected, isBot: player.isBot, alive: player.alive,
+        hp: player.hp, maxHp: this.maximumHp(player), character: player.character,
         role: player.role && (player.id === playerId || player.role === "sheriff" || !player.alive || this.phase === "game_over") ? { id: player.role, ...ROLES[player.role] } : null,
         handCount: player.hand.length,
         hand: player.id === playerId ? player.hand.map((card) => this.publicCard(card)) : undefined,
