@@ -123,3 +123,39 @@ dialog[open]{animation:dialogIn .3s cubic-bezier(.16,1,.3,1) both}dialog[open]::
   .player-count-7 .seat-5{right:4px;top:25%}
   .player-count-7 .seat-6{right:20%;bottom:15%}
 }
+
+/* Wider player plates keep the character label from swallowing the hand count. */
+.player-seat{width:245px}
+.seat-copy{flex:1}
+.seat-copy small{display:flex;align-items:center;gap:3px;min-width:0;text-overflow:clip}
+.seat-copy small .seat-character-name{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:#c8b99b}
+.seat-copy small b{flex:0 0 auto;color:#e6c889;font:inherit}
+.character-effect-source{display:block;flex:0 0 50px;width:50px;height:62px;line-height:0}
+.identity-effect-source{display:block;width:100%;height:100%;line-height:0}
+.equipment-effect-source{display:inline-block;line-height:0;border-radius:3px}
+.effect-source{cursor:help;outline:none}
+.effect-source:focus-visible,.effect-source.tooltip-open{box-shadow:0 0 0 2px #f0bf61,0 0 16px #efad4d99}
+
+/* Shared effect popover: hover/focus on desktop, tap-to-toggle on touch devices. */
+.effect-tooltip{position:fixed;z-index:220;width:min(290px,calc(100vw - 24px));padding:14px 16px;color:#f8e8c6;background:linear-gradient(145deg,#392319f7,#170c08f7);border:1px solid #d29a48;border-radius:7px;box-shadow:0 18px 45px #000b,inset 0 0 24px #a65f2024;pointer-events:none;opacity:0;transform:translateY(7px) scale(.97);transition:opacity .16s,transform .16s;backdrop-filter:blur(8px)}
+.effect-tooltip.show{opacity:1;transform:none}
+.effect-tooltip small,.effect-tooltip strong{display:block}.effect-tooltip small{margin-bottom:5px;color:#e9b65f;font:800 .61rem "Noto Sans KR",sans-serif;letter-spacing:.14em}.effect-tooltip strong{font-size:1rem}.effect-tooltip p{margin:8px 0 0;color:#dfcfb0;font-size:.78rem;line-height:1.55}
+
+/* A public played card briefly crosses the center of every player's table. */
+.card-play-overlay{position:fixed;inset:0;z-index:160;display:grid;place-items:center;padding:20px;pointer-events:none;opacity:0;transition:opacity .26s;background:radial-gradient(circle at center,#0e080270 0,transparent 38%)}
+.card-play-overlay article{display:grid;justify-items:center;min-width:230px;padding:18px 22px;color:#fff0cf;text-align:center;background:linear-gradient(145deg,#3e2519e8,#180d09e8);border:1px solid #d8a34e;border-radius:10px;box-shadow:0 24px 70px #000c,inset 0 0 42px #ac68252b;opacity:0;transform:translateY(34px) scale(.78) rotate(-2deg);transition:opacity .24s,transform .52s cubic-bezier(.16,1,.3,1);backdrop-filter:blur(7px)}
+.card-play-overlay.show{opacity:1}.card-play-overlay.show article{opacity:1;transform:none}
+.card-play-overlay article>small{color:#e6b25c;font:900 .62rem "Noto Sans KR",sans-serif;letter-spacing:.2em}.card-play-overlay article>strong{margin-top:11px;font-size:1.05rem}.card-play-overlay article>p{max-width:280px;margin:5px 0 0;color:#d8c29c;font-size:.76rem;line-height:1.4}
+.card-play-card{position:relative;width:116px;height:175px;margin-top:10px;border-radius:7px;box-shadow:0 15px 34px #000}.card-play-card>img{width:100%;height:100%;object-fit:cover;border:2px solid #e0b565;border-radius:7px}.card-play-card .card-name-strip{font-size:.7rem}.card-play-card .card-corner{left:4px;top:auto;bottom:4px}
+
+@media(max-width:900px){.player-seat{width:205px}.character-effect-source{flex-basis:50px}}
+@media(max-width:620px){
+  .player-seat{width:158px}
+  .character-effect-source{flex-basis:36px;width:36px;height:48px}
+  .seat-copy small{gap:2px}
+  .effect-tooltip{padding:12px 14px}.effect-tooltip p{font-size:.74rem}
+  .card-play-overlay article{min-width:205px;padding:15px 18px}.card-play-card{width:102px;height:154px}
+}
+.player-count-7 .player-seat{width:225px}
+@media(max-width:1180px){.player-count-7 .player-seat{width:195px}}
+@media(max-width:620px){.player-count-7 .player-seat{width:152px}}

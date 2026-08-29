@@ -87,6 +87,19 @@
       <button id="victory-close" class="primary">결과 확인</button>
     </article>
   </div>
+  <div id="card-play-overlay" class="card-play-overlay hidden" aria-live="polite" aria-atomic="true">
+    <article>
+      <small id="card-play-kicker">CARD PLAYED</small>
+      <div id="card-play-card" class="card-play-card"></div>
+      <strong id="card-play-title"></strong>
+      <p id="card-play-target"></p>
+    </article>
+  </div>
+  <div id="effect-tooltip" class="effect-tooltip hidden" role="tooltip">
+    <small id="effect-tooltip-kicker"></small>
+    <strong id="effect-tooltip-title"></strong>
+    <p id="effect-tooltip-copy"></p>
+  </div>
   <div id="toast" class="toast"></div>
   <script type="module" src="/app.js"></script>
 </body>

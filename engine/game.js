@@ -51,6 +51,8 @@ export class BangGame {
     assert(this.phase === "lobby", "이미 시작한 게임입니다.");
     assert(playerId === this.hostId, "방장만 게임을 시작할 수 있습니다.");
     assert(this.players.length >= 4 && this.players.length <= 7, "4~7명이 모여야 시작할 수 있습니다.");
+    // 참가 순서가 테이블 거리로 고정되지 않도록 매 게임마다 먼저 자리를 섞는다.
+    this.players = shuffle(this.players);
     const roles = shuffle(ROLE_SETS[this.players.length]);
     this.players.forEach((player, index) => {
       player.role = roles[index];
@@ -326,7 +328,8 @@ export class BangGame {
       ? `${player.nickname}님이 ${target.nickname}님에게 <${info.name}>을(를) 사용했습니다.`
       : `${player.nickname}님이 <${info.name}>을(를) 사용했습니다.`;
     this.addLog(actionText, "card", {
-      kind: "card", actorId: player.id, targetId: target?.id ?? null, cardType: card.type
+      kind: "card", actorId: player.id, targetId: target?.id ?? null, cardType: card.type,
+      card: this.publicCard(card)
     });
     this.checkSuzy(player);
     this.resolvePlayedCard(player, card, targetId, targetCardId);
@@ -413,7 +416,8 @@ export class BangGame {
     assert(card.type === allowed || converted, `이 상황에는 <${CARD_INFO[allowed].name}> 카드가 필요합니다.`);
     player.hand.splice(index, 1); this.discardCard(card); this.checkSuzy(player);
     this.addLog(`${player.nickname}님이 <${CARD_INFO[card.type].name}>으로 응답했습니다.`, "card", {
-      kind: "response", actorId: player.id, cardType: card.type, pendingType: this.pending?.type ?? null
+      kind: "response", actorId: player.id, cardType: card.type, pendingType: this.pending?.type ?? null,
+      card: this.publicCard(card)
     });
     return card;
   }

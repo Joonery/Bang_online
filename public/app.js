@@ -14,7 +14,12 @@ let judgmentHideTimer = null;
 let lastAnnouncementId = null;
 let victoryDismissed = false;
 let unreadChat = false;
+let activeEffectSource = null;
+let playedCardTimer = null;
+let playedCardActive = false;
+const playedCardQueue = [];
 const mobileSocialQuery = window.matchMedia("(max-width: 980px)");
+const touchEffectQuery = window.matchMedia("(hover: none), (pointer: coarse)");
 const joinId = new URLSearchParams(location.search).get("join");
 
 function escapeHtml(value) { return String(value).replace(/[&<>'"]/g, (char) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", "'": "&#39;", '"': "&quot;" })[char]); }
@@ -26,10 +31,12 @@ function connect() {
   source?.close(); source = new EventSource(`/api/events?token=${encodeURIComponent(token)}`);
   source.addEventListener("state", (event) => {
     const previousPhase = state?.phase;
+    const initialState = !state;
+    const previousLogIds = new Set((state?.log ?? []).map((entry) => entry.id));
     const next = JSON.parse(event.data);
     if (!next.log) { const known = new Map((state?.log ?? []).map((entry) => [entry.id, entry])); (next.logDelta ?? []).forEach((entry) => known.set(entry.id, entry)); next.log = [...known.values()].slice(-240); }
     delete next.logDelta; next.chat ??= state?.chat ?? []; state = next;
-    $("#home").classList.add("hidden"); $("#game").classList.remove("hidden"); render(); handleSetup(previousPhase); handleJudgment(); handleVictory();
+    $("#home").classList.add("hidden"); $("#game").classList.remove("hidden"); render(); handleSetup(previousPhase); handleJudgment(); handleVictory(); handlePlayedCardLogs(previousLogIds, initialState);
   });
   source.addEventListener("chat", (event) => {
     const message = JSON.parse(event.data);
@@ -66,6 +73,9 @@ $("#forget-session").addEventListener("click", () => { localStorage.removeItem("
 function imagePath(kind, filename) { return `/assets/${kind}/${filename}`; }
 function cardImage(card) { return imagePath("playing_card", card.image); }
 function suitClass(card) { return ["heart", "diamond"].includes(card.suit) ? "red-suit" : "black-suit"; }
+function effectAttributes(title, kicker, description) {
+  return `tabindex="0" data-effect-title="${escapeHtml(title)}" data-effect-kicker="${escapeHtml(kicker)}" data-effect-copy="${escapeHtml(description)}" aria-label="${escapeHtml(title)} 효과 보기"`;
+}
 function cardNode(card, options = {}) {
   const button = document.createElement(options.static ? "article" : "button"); button.className = `playing-card ${options.small ? "small" : ""} ${options.selected ? "selected" : ""}`;
   button.innerHTML = `<img src="${cardImage(card)}" alt="${escapeHtml(card.name)}"><span class="card-name-strip">${escapeHtml(card.name)}</span><span class="card-corner ${suitClass(card)}">${SUIT_SYMBOL[card.suit]} ${card.rank}</span><span class="card-tooltip"><b>${escapeHtml(card.name)}</b><small>${SUIT_SYMBOL[card.suit]} ${card.rank}</small>${escapeHtml(card.description)}</span>`;
@@ -84,10 +94,10 @@ function renderPlayers(me) {
   state.players.forEach((player, index) => {
     const node = document.createElement("article"); node.className = `player-seat seat-${index} ${player.id === state.currentPlayerId ? "current" : ""} ${!player.alive ? "dead" : ""}`;
     const role = player.role ? `<img class="role-chip" src="${imagePath("role_card", player.role.image)}" alt="${player.role.name}">` : `<span class="role-back">?</span>`;
-    const equipment = player.equipment.map((card) => `<span title="${escapeHtml(card.description)}"><img src="${cardImage(card)}" alt="${escapeHtml(card.name)}"></span>`).join("");
-    const avatar = player.character ? `<img class="avatar" src="${imagePath("character_card", player.character.image)}" alt="${player.character.name}">` : `<span class="avatar avatar-back">★</span>`;
+    const equipment = player.equipment.map((card) => `<span class="effect-source equipment-effect-source" ${effectAttributes(card.name, `${SUIT_SYMBOL[card.suit]} ${card.rank} · 장착 카드`, card.description)}><img src="${cardImage(card)}" alt="${escapeHtml(card.name)}"></span>`).join("");
+    const avatar = player.character ? `<span class="effect-source character-effect-source" ${effectAttributes(player.character.name, `인물 카드 · 생명력 ${player.character.hp}`, player.character.ability)}><img class="avatar" src="${imagePath("character_card", player.character.image)}" alt="${escapeHtml(player.character.name)}"></span>` : `<span class="avatar avatar-back">★</span>`;
     const health = player.maxHp ? `${"♥".repeat(Math.max(0, player.hp))} ${player.hp}/${player.maxHp}` : player.character ? "인물 선택 완료" : "준비 중";
-    node.innerHTML = `<div class="seat-card">${avatar}<div class="seat-copy"><strong>${player.isBot ? '<em class="bot-badge">BOT</em>' : ""}${escapeHtml(player.nickname)}</strong><span>${player.alive ? health : "제거됨"}</span><small>${player.character?.name ?? "인물 선택 중"} · ${player.handCount}장</small></div>${role}</div><div class="equipment-row">${equipment}</div><i class="connection-dot ${player.connected ? "online" : ""}"></i>`;
+    node.innerHTML = `<div class="seat-card">${avatar}<div class="seat-copy"><strong>${player.isBot ? '<em class="bot-badge">BOT</em>' : ""}${escapeHtml(player.nickname)}</strong><span>${player.alive ? health : "제거됨"}</span><small><span class="seat-character-name">${escapeHtml(player.character?.name ?? "인물 선택 중")}</span><b>· ${player.handCount}장</b></small></div>${role}</div><div class="equipment-row">${equipment}</div><i class="connection-dot ${player.connected ? "online" : ""}"></i>`;
     ring.append(node);
   });
 }
@@ -95,7 +105,7 @@ function renderPlayers(me) {
 function renderIdentity(me) {
   $("#my-name").textContent = me.nickname; $("#my-role").textContent = me.role ? `${me.role.name} · ${me.role.goal}` : "숨겨진 역할";
   $("#my-hp").textContent = me.maxHp ? `${"♥".repeat(Math.max(0, me.hp))} ${me.hp}/${me.maxHp}` : state.phase === "lobby" ? "입장 대기" : "게임 준비 중";
-  $("#my-character").innerHTML = me.character ? `<img src="${imagePath("character_card", me.character.image)}" alt="${me.character.name}">` : "★";
+  $("#my-character").innerHTML = me.character ? `<span class="effect-source identity-effect-source" ${effectAttributes(me.character.name, `인물 카드 · 생명력 ${me.character.hp}`, me.character.ability)}><img src="${imagePath("character_card", me.character.image)}" alt="${escapeHtml(me.character.name)}"></span>` : "★";
 }
 
 function renderHand(me) {
@@ -289,6 +299,73 @@ function handleVictory() {
   overlay.classList.remove("hidden");
 }
 
+function positionEffectTooltip(source) {
+  const tooltip = $("#effect-tooltip");
+  const sourceRect = source.getBoundingClientRect();
+  const tooltipRect = tooltip.getBoundingClientRect();
+  const margin = 12;
+  const left = Math.min(window.innerWidth - tooltipRect.width - margin, Math.max(margin, sourceRect.left + sourceRect.width / 2 - tooltipRect.width / 2));
+  const top = sourceRect.top >= tooltipRect.height + margin * 2
+    ? sourceRect.top - tooltipRect.height - margin
+    : Math.min(window.innerHeight - tooltipRect.height - margin, sourceRect.bottom + margin);
+  tooltip.style.left = `${left}px`;
+  tooltip.style.top = `${Math.max(margin, top)}px`;
+}
+
+function showEffectTooltip(source) {
+  if (!source?.dataset.effectTitle) return;
+  activeEffectSource?.classList.remove("tooltip-open");
+  activeEffectSource = source;
+  source.classList.add("tooltip-open");
+  $("#effect-tooltip-kicker").textContent = source.dataset.effectKicker || "CARD EFFECT";
+  $("#effect-tooltip-title").textContent = source.dataset.effectTitle;
+  $("#effect-tooltip-copy").textContent = source.dataset.effectCopy || "설명이 없습니다.";
+  const tooltip = $("#effect-tooltip");
+  tooltip.classList.remove("hidden");
+  requestAnimationFrame(() => { tooltip.classList.add("show"); positionEffectTooltip(source); });
+}
+
+function hideEffectTooltip() {
+  activeEffectSource?.classList.remove("tooltip-open");
+  activeEffectSource = null;
+  const tooltip = $("#effect-tooltip");
+  tooltip.classList.remove("show");
+  tooltip.classList.add("hidden");
+}
+
+function handlePlayedCardLogs(previousLogIds, initialState) {
+  if (initialState) return;
+  const entries = state.log.filter((entry) => !previousLogIds.has(entry.id) && ["card", "response"].includes(entry.meta?.kind) && entry.meta.card);
+  if (!entries.length) return;
+  playedCardQueue.push(...entries);
+  playNextCardAnimation();
+}
+
+function playNextCardAnimation() {
+  if (playedCardActive || !playedCardQueue.length) return;
+  playedCardActive = true;
+  const entry = playedCardQueue.shift();
+  const card = entry.meta.card;
+  const actor = state.players.find((player) => player.id === entry.meta.actorId);
+  const target = state.players.find((player) => player.id === entry.meta.targetId);
+  $("#card-play-kicker").textContent = entry.meta.kind === "response" ? "RESPONSE CARD" : "CARD PLAYED";
+  $("#card-play-card").innerHTML = `<img src="${cardImage(card)}" alt="${escapeHtml(card.name)}"><span class="card-name-strip">${escapeHtml(card.name)}</span><span class="card-corner ${suitClass(card)}">${SUIT_SYMBOL[card.suit]} ${card.rank}</span>`;
+  $("#card-play-title").textContent = `${actor?.nickname ?? "플레이어"} · ${card.name}`;
+  $("#card-play-target").textContent = target ? `${target.nickname}에게 사용` : entry.meta.kind === "response" ? "카드로 응답했습니다" : card.description;
+  const overlay = $("#card-play-overlay");
+  overlay.classList.remove("hidden");
+  requestAnimationFrame(() => overlay.classList.add("show"));
+  clearTimeout(playedCardTimer);
+  playedCardTimer = setTimeout(() => {
+    overlay.classList.remove("show");
+    playedCardTimer = setTimeout(() => {
+      overlay.classList.add("hidden");
+      playedCardActive = false;
+      playNextCardAnimation();
+    }, 280);
+  }, 1700);
+}
+
 function renderDiscard() { const card = state.discardTop; const node = $("#discard-card"); if (!card) { node.className = "mini-card empty"; node.innerHTML = "<span>버린 카드</span>"; } else { node.className = "mini-card"; node.innerHTML = `<img src="${cardImage(card)}" alt="${card.name}"><span>${SUIT_SYMBOL[card.suit]}${card.rank}</span>`; } }
 function renderSocial() {
   if (!state) return; const log = $("#log-list"); const logBottom = log.scrollHeight - log.scrollTop - log.clientHeight < 80; log.innerHTML = state.log.map((entry) => `<article class="log ${entry.tone}"><small>${new Date(entry.at).toLocaleTimeString("ko-KR", { hour: "2-digit", minute: "2-digit" })}</small><p>${escapeHtml(entry.text)}</p></article>`).join(""); if (logBottom) log.scrollTop = log.scrollHeight;
@@ -338,6 +415,34 @@ $$('[data-tab]').forEach((button) => button.addEventListener("click", () => { $$
 const handleSocialViewportChange = () => { if (isChatVisible()) markChatRead(); else renderChatAlerts(); };
 if (mobileSocialQuery.addEventListener) mobileSocialQuery.addEventListener("change", handleSocialViewportChange); else mobileSocialQuery.addListener(handleSocialViewportChange);
 document.addEventListener("visibilitychange", () => { if (isChatVisible()) markChatRead(); });
+document.addEventListener("pointerover", (event) => {
+  if (event.pointerType === "touch") return;
+  const source = event.target.closest(".effect-source");
+  if (!source || source.contains(event.relatedTarget)) return;
+  showEffectTooltip(source);
+});
+document.addEventListener("pointerout", (event) => {
+  if (event.pointerType === "touch") return;
+  const source = event.target.closest(".effect-source");
+  if (!source || source.contains(event.relatedTarget)) return;
+  hideEffectTooltip();
+});
+document.addEventListener("focusin", (event) => {
+  if (!touchEffectQuery.matches) showEffectTooltip(event.target.closest(".effect-source"));
+});
+document.addEventListener("focusout", (event) => {
+  if (!touchEffectQuery.matches && event.target.closest(".effect-source")) hideEffectTooltip();
+});
+document.addEventListener("click", (event) => {
+  const effectSource = event.target.closest(".effect-source");
+  if (effectSource && touchEffectQuery.matches) {
+    event.preventDefault();
+    if (activeEffectSource === effectSource) hideEffectTooltip(); else showEffectTooltip(effectSource);
+  } else if (!effectSource && activeEffectSource) hideEffectTooltip();
+});
+document.addEventListener("keydown", (event) => { if (event.key === "Escape" && activeEffectSource) hideEffectTooltip(); });
+window.addEventListener("resize", () => { if (activeEffectSource?.isConnected) positionEffectTooltip(activeEffectSource); else if (activeEffectSource) hideEffectTooltip(); });
+window.addEventListener("scroll", () => { if (activeEffectSource?.isConnected) positionEffectTooltip(activeEffectSource); }, true);
 $("#character-dialog").addEventListener("cancel", (event) => event.preventDefault());
 $("#victory-close").addEventListener("click", () => { victoryDismissed = true; $("#victory-overlay").classList.add("hidden"); });
 $("#chat-form").addEventListener("submit", async (event) => { event.preventDefault(); const input = $("#chat-input"); const text = input.value.trim(); if (!text) return; input.value = ""; try { await request("/api/chat", { token, text }); } catch (error) { showToast(error.message); } });

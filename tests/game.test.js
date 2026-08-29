@@ -32,6 +32,17 @@ test("역할 배분 뒤 각 플레이어에게 중복 없는 인물 두 장을 �
   assert.equal("characterOptions" in view.players[1], false);
 });
 
+test("게임을 시작할 때 참가 순서와 무관하게 자리를 매번 무작위로 섞는다", () => {
+  const orders = new Set();
+  for (let round = 0; round < 12; round += 1) {
+    const game = new BangGame();
+    for (let index = 0; index < 7; index += 1) game.addPlayer({ id: `r${index}`, token: `rt${index}`, nickname: `자리${index}`, host: index === 0 });
+    game.start("r0");
+    orders.add(game.players.map((player) => player.id).join(","));
+  }
+  assert.ok(orders.size > 1, "여러 게임의 좌석 순서가 모두 같아서는 안 됩니다.");
+});
+
 test("공개 카드의 인스턴스 ID가 카드 종류 ID로 덮어써지지 않는다", () => {
   const game = readyGame(4); const source = game.current().hand[0]; const visible = game.publicCard(source);
   assert.equal(visible.id, source.id); assert.match(visible.id, /^c\d+$/); assert.equal(visible.type, source.type);
@@ -42,6 +53,8 @@ test("브라우저에 공개한 카드 ID를 그대로 보내 실제 카드를 �
   const scope = { id: "c-browser-use", type: "scope", suit: "spade", rank: "A" }; player.hand.push(scope);
   game.playCard(player.id, game.publicCard(scope).id);
   assert.equal(player.hand.includes(scope), false); assert.equal(player.equipment.includes(scope), true);
+  const playLog = game.log.findLast((entry) => entry.meta?.kind === "card");
+  assert.equal(playLog.meta.card.id, scope.id); assert.equal(playLog.meta.card.name, "조준경");
 });
 
 test("새 총을 장착하면 확인 절차 없이 기존 총을 버리고 즉시 교체한다", () => {
